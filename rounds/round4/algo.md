@@ -1,106 +1,112 @@
-# Round 4 — Same products as Round 3, plus Day 3 holdout
+# Round 4 — HYDROGEL_PACK / VELVETFRUIT_EXTRACT / VEV options
 
-R4 was the round that surprised us in the opposite direction from how we expected. We had spent the week between R3 and R4 preparing for a new product chain; what we got instead was no new products, no new mechanics, and a single new day of data. The visualizer captured it cleanly:
+R4 was structurally identical to R3: same products (`HYDROGEL_PACK`, `VELVETFRUIT_EXTRACT`, 10 VEV call strikes). What changed was a third day of unseen data that ran in a different volatility regime. We answered with two additions: a per-tick parabolic volatility smile fitter on the options, and a runtime day-type classifier that detects the regime in the first 1000 ticks and switches parameters accordingly.
 
-> *"Round 4 — same products as R3: VELVETFRUIT_EXTRACT, HYDROGEL_PACK, 10 VEV_* call options. Days 1, 2, 3."*
->
-> *"Round 4 ... days 1+2 are R3 days 1+2 renamed; day 3 = R3 holdout."*
-
-So R4 was effectively a single-day extension of R3. That framing slightly understates how much of the field was caught off-guard, though; most of the top teams had spent the gap building strategies for products that did not arrive. The new alpha came from better calibration on the held-out day 3, not from a new product, and the teams that did well in R4 either re-tuned their R3 strategy on day 3 or added a vol-smile layer on top of the option-pricing logic.
-
-We did both.
+Backtest across 6 days (R3 d0–d2 + R4 d1–d3): **$233,416 average / $167,640 worst-day**.
 
 ## What we shipped
 
-[`algo.py`](algo.py) is `v77_smile_hybrid`, which extends the R3 line with a per-tick **parabolic vol-smile fitter** on the VEV options. The architectural diff from R3's `v32_final`:
+[`algo.py`](algo.py) — `v77_smile_hybrid`
 
-| Layer | R3 (v32_final) | R4 (v77_smile_hybrid) |
-|-|-|-|
-| HG / VF MR | OU fair @ 9990, AR(1) fade | _unchanged_ — proven $160k base alpha |
-| Option pricing | Per-strike `IV_MAP` (static) | Per-tick parabolic fit `IV(m_t) = a + b·m_t + c·m_t²` where `m_t = log(K/S)/√T` |
-| Option fair value | `BS(S, K, T, σ_static)` | `BS(S, K, T, σ_smile_blended)` |
-| Smile-relative MR | none | EMA(α=0.40) on `IV_observed - IV_smile`; trade against the deviation |
-| Hard-day detection | none | When VF realized vol > threshold, switch to per-day overrides on `opt_inv_skew`, `smile_w`, `clip_map` |
+Three independent trading layers per tick, each estimating its own fair value and placing its own orders:
 
-The smile layer is the alpha, and the insight came from a top R3 team's writeup that we surfaced via `prosperity-intel`:
+- **`HYDROGEL_PACK` MR** — static anchor 9988, L1 imbalance adjustment, shock-fade on moves > 3 ticks. Edge 20, max take clip 50, 3-level passive ladder each side. Inventory skew against position. `MAX_POS=200`. ~$45k/day standalone.
+- **`VELVETFRUIT_EXTRACT` MR + whale signal** — anchor 5240, same imbalance/shock logic. Named bot IDs (Mark 49, Mark 67, Mark 22) predict +$2–3 moves in VF over 50 ticks; on event tick we shift fair +3.0 and aggressively buy 35 at market regardless of edge. Whale signal disabled on hard days. Edge 9, clip 25, 5× edge warmup for the first 50 ticks. Combined HG+VF: ~$115k/day.
+- **Vol-smile option layer** — per-tick IV back-out via 30-iteration bisection, parabolic smile fit across 8 fitting strikes (VEV_4500–VEV_6000), MR around per-strike smile residuals. Final fair: `rolling_mean + clamp(W × (smile_fair − mid), ±cap)`. Normal: W=5.0, cap=1.5. Hard day: W=12.0, cap=4.0. `MAX_POS=300` per strike.
 
-> 1. Fit a parabola IV(m_t) across strikes per tick.
-> 2. The smile parabola is stable; deviations IV_observed − IV_smile show 1-lag negative autocorrelation → MR alpha.
-> 3. Convert smile-IV back to a theoretical fair price `BS(S, K, T, σ_smile)`.
-> 4. Trade MR around this dynamic theoretical fair (NOT a static rolling mean).
-> 5. Smile-fair moves with VF and accommodates strike structure.
+Backup [`algo_backup.py`](algo_backup.py) — `v_smile_pure` — drops VF alpha entirely, uses VF position as a pure delta hedge, trades options only around smile-implied fair with cross-strike vol-arb pairs. Lower average PnL, higher floor. Not shipped; kept as a one-line revert.
 
-Alongside the main strategy, we kept a backup at [`algo_backup.py`](algo_backup.py), `v_smile_pure`, which is a delta-neutral smile-pure architecture that drops HG/VF entirely. It was lower-mean but more robust to a smile-regime shift on day 3. We did not ship it; however, we kept it as a one-line revert in case `v77_smile_hybrid` blew up in production.
+## Day-type detection
 
-## How we got there — the 50+ tuning iterations
+The single biggest late improvement: **+$35k on worst-day PnL**.
 
-`v77_smile_hybrid` was iterated 50+ times over Apr 27–28, all on the same architectural skeleton. The git log reads like a sweep:
+At tick 1000, the algo classifies the day from HG and VF averages across the first 1000 ticks:
 
 ```
-04-27 10:55  v77_smile_hybrid: per-tick parabolic vol smile + smile-bias to rolling MR
-04-27 11:58  EMA-smoothed smile-IV + per-strike clip map
-04-27 12:42  hard-day detection → adaptive opt_inv_skew
-04-27 13:04  simplified clip map — only VEV_5300=2
-04-27 13:20  hard-day skew 0.029→0.035
-04-27 15:41  hard-day clip overrides for VEV_5200/5300
-04-27 16:29  soft-high-VF detection + hard-day 4000 clip
-04-27 17:14  smile bias sign flipped to +1.0; soft-VF clip pushed
-04-27 17:36  soft-VF day → negative inv_skew (long-bias inventory)
-04-27 18:49  hard-day smile bias weight override (1.0 → 7.0)
-04-27 19:18  hard-day EMA α 0.55 → 0.3 (less smoothing)
-04-27 19:52  hard-day smile m_range 1.5 → 3.0
-04-27 21:32  hard-day skew 0.035 → 0.025
-04-27 21:42  hard-day smile w 7.0 → 8.0
-04-27 22:00  hard-day cap 3.0 → 4.0; smile w 8.0 → 12.0
-04-27 22:23  opt_inv_skew 0.02 → 0.05 (massive R4_d3 lift)
-04-27 22:58  smile w 1.0→1.2 + whale signal (Mark 22 SELL VF added)
-04-27 23:12  HG whale signal — Mark 38 BUY / Mark 14 SELL → bearish
-04-27 23:24  opt_inv_skew 0.05 → 0.055
-04-27 23:27  opt_inv_skew 0.055 → 0.054 (balances R4_d1 / R4_d3 binding)
-            ↑ MIN=$194,465 (+$34,239)
-04-28 00:24  opt_inv_skew 0.054 → 0.050 (revert overfit)
-04-28 00:41  SMILE_BIAS_CAP 3.0 → 4.0 → MIN $193,329
-04-28 02:16  add HG/VF dynamic anchor option (off by default; tested but hurts)
-04-28 02:23  v78: +Mark 14 SELL VF, MC drift fix
-04-28 02:32  WHALE_FORCE_TAKE on event tick (v78 pattern, neutral on MIN)
-04-28 02:51  HG_IMBAL_SHIFT -5 → -3 → MIN $193,518 (+$20)
-04-28 04:02  shift to MAX-EV config (skew=0.020, smile_w=1.0)
-04-28 04:16  cap=3, m_range=1.5 → AVG $217,576
-04-28 04:34  hg_inv_skew=-0.06 + vf_take_clip=30 → AVG $219,330 / MIN $179,153
-04-28 04:52  vf_edge 10 → 9 → AVG $221,026 / MIN $174,853, +$1,696 EV
-04-28 05:05  opt_inv_skew 0.020 → 0.015 → AVG $221,342
-04-28 05:42  SMILE_BIAS_W 1.0→3.5, cap 3.0→1.5 → AVG $221,862, MIN $170,916
-04-28 05:52  HG_WHALE_BIAS 8.0 → 0.0 → AVG $222,907 (+$1,045)
-04-28 06:14  opt_edge 10→8, skew 0.015→0.005 → AVG $231,371 (+$8,464)
-04-28 06:28  SMILE_BIAS_W 3.5 → 5.0 → AVG $231,599
-04-28 06:47  HARD_DAY_OPT_INV_SKEW 0.025→0.012 → AVG $232,652 (+$1,053, MIN $162,972 +$6,318)
-04-28 07:01  HARD_DAY_SMILE_IV_EMA 0.3→1.0 → AVG $233,149 (+$497, MIN $165,954 +$2,982)
-04-28 07:26  SMILE_IV_EMA_ALPHA 0.55→0.40, vf_take_clip 30→25 → AVG $233,265
-04-28 07:48  HG_OU_MU 9990→9988 → AVG $233,416 (+$151, MIN $167,640 +$1,418)
-            ↑ FINAL R4 SHIP
+Hard day:      HG_avg > 10000
+               (R4 D3 ~10033; other days 9958–9982 — easy separation)
+               → opt_inv_skew=0.012, larger clips, smile W=12.0/cap=4.0,
+                 raw IV signal (skip EMA), moneyness range 1.5→3.0, whale disabled
+
+Soft-high-VF:  VF_avg > 5250, HG normal
+               → opt_inv_skew=−0.010 (hold long bias), clip overrides on VEV_5200/5300
+
+Normal:        neither condition → default params
 ```
 
-Two things from this trail are worth flagging explicitly.
+## The math
 
-First, AVG vs MIN as twin objectives. We tracked both the 6-day average PnL and the 6-day minimum PnL across (R3 d0, d1, d2, R4 d1, d2, d3). Tuning to AVG alone overfits to soft days, and day 3 was the hard one; tuning to MIN alone leaves money on the table on soft days. The final pick balances both: MIN $167k is acceptable, AVG $233k is the headline.
+**Black-Scholes:** `BS(S, K, T, σ) = S·N(d₁) − K·N(d₂)`, where `d₁ = (ln(S/K) + 0.5σ²T) / (σ√T)` and `d₂ = d₁ − σ√T`.
 
-Second, hard-day versus soft-day overrides. A handful of params get adaptive values based on a runtime "is this a hard day?" detection (VF realized-vol crossing a threshold). On hard days we go more conservative (lower `opt_inv_skew`, smaller clips, faster smile EMA). This adaptive switching was the single biggest lift in the late tuning cycle, and is the piece I would defend most if pushed on architectural decisions.
+**Implied vol:** Bisection on σ ∈ [0.001, 4.0] until `|BS − market| < 0.01`. 30 iterations always sufficient. No vega needed.
 
-## Discord intel for R4
+**Smile fit:** Least-squares parabola `IV(m) = a·m² + b·m + c` where `m = log(K/S)/√T`. Solved via Cramer's rule on the 3×3 normal equations — no numpy. Need ≥4 valid IVs in [0.05, 1.5]; fall back to rolling mean otherwise.
 
-R4 intel was lighter than R3 because most teams were also iterating their R3 strategies, rather than building anything new. Even so, three notable signals came through `prosperity-intel`:
+**Time to expiry:** `T = (4.0 − timestamp/1_000_000) / 252`. Each day runs 0 → 999 900 (step 100).
 
-- **No new products confirmed.** By Apr 26 18:00, multiple top teams asked in `#general` "is there anything new in R4?" and mods deflected to "the data tells the story." That was implicit confirmation that R4 was a holdout-day round.
-- **Day 3 vol regime is different.** Several teams' open-source backtests posted Apr 27 showed sharp drops in their R3 strategies on day 3. The smile fit was the obvious adaptation; we got to it because we saw three independent teams complaining about d3 in the same hour.
-- **Whale-bot pattern.** Community discussion identified specific bot trader IDs ("Mark 14", "Mark 22", "Mark 38", "Mark 67") whose flow seemed to lead VF/HG moves. We tested a "follow the whale" overlay (`v77_smile_hybrid: WHALE_FORCE_TAKE`) but it was net-neutral and removed.
+**EMA smoothing:** α=0.40 on per-strike smile-IV. On hard days α=1.0 — raw signal is better.
 
-## Manual challenge
+## Manual trading — Aether Crystal options
 
-See [`manual.md`](manual.md).
+Spot ~50.00. Five put/call strikes, two short-dated ATMs, three exotics (chooser, binary put, knock-out put). PnL averaged over 100 GBM paths. Result: **+$63,019 (rank 256)**.
+
+**Chooser arb (+$72k)**
+
+Static replication via put-call parity at the choose date: `Chooser(K, T+21, choose at T+14) = Call(K, T+21) + Put(K, T+14)`. Market quoted the chooser at 22.20; replicating portfolio (call 12.05 + put 9.75) cost 21.80 — 40 cents cheaper. 50 contracts × 3000 multiplier = $60k of locked arb, zero model risk. The 100-path averaging means realized PnL converges to expected value. Cleanest trade of the competition.
+
+**Binary put hedge (+$23k)**
+
+Shorted the binary put (pays 10 if spot < 40) at 5.00, BSM fair ~4.77. Hedged with a 35–45 put spread. Worst case bounded to [−5, +5] per contract.
+
+**Knock-out put (−$29k)**
+
+Bought a down-and-out put (K=45, barrier=35) using Broadie-Glasserman-Kou discrete-monitoring correction. The analytic didn't match the simulator's actual knockout rate. Most contracts knocked. Lesson: for path-dependent exotics, Monte Carlo against the actual simulator. Continuous-time analytic corrections are not a substitute.
+
+**Unnecessary call (−$23k)**
+
+Bought a T+14 call as a gamma hedge on the chooser arb. The arb's structure handles gamma intrinsically once the T+14 put expires. Redundant; free money left on the table.
+
+Skipping both mistakes → ~$115k instead of $63k.
+
+## How we tuned it
+
+50+ backtests over Apr 27–28 on the same skeleton. Twin objectives: **AVG** (6-day mean) and **MIN** (worst single day). Target: AVG > $230k with MIN > $160k.
+
+Parameters that moved the needle:
+
+| Parameter | Path | Effect |
+|---|---|---|
+| `opt_inv_skew` | 0.02 → 0.055 → 0.005 | single biggest sensitivity |
+| `SMILE_BIAS_W` | 1.0 → 3.5 → 5.0 | smile vs rolling-mean trust |
+| `HARD_DAY_SKEW` | 0.025 → 0.012 | hard-day inventory speed |
+| `HG_OU_MU` | 9990 → 9988 | last $151 of EV |
+| `SMILE_IV_EMA` | 0.55 → 0.40 | smoothing vs responsiveness |
+| `vf_edge` | 10 → 9 | tighter entry |
+
+## Risk controls
+
+Position limits: HG 200, VF 200, each option strike 300. Lock mode at tick 9999 switches to unwind-only — only orders that reduce existing positions, forcing approximately flat going into the next day. Options warmup: rolling-mean window requires ≥20 mids before the smile layer starts trading; VF uses 5× edge for the first 50 ticks.
 
 ## Result
 
-| Pick | Local AVG (6 days) | Local MIN | Live | Notes |
-|-|-|-|-|-|
-| v77_smile_hybrid (final) | $233,416 | $167,640 | _TBD_ | Final R4 ship |
-| v_smile_pure (backup) | _lower mean_ | _higher MIN_ | _N/A_ | Did not ship; kept as one-line revert |
+| Pick | AVG (6 days) | MIN |
+|---|---|---|
+| v77_smile_hybrid (final ship) | $233,416 | $167,640 |
+| v_smile_pure (backup, not shipped) | lower | higher floor |
+
+## Glossary
+
+| Term | Definition |
+|---|---|
+| MR | Mean-reversion: buy below fair, sell above, repeat. |
+| IV | Implied vol: the σ that makes BS = market price. |
+| smile | Parabolic curve of IV across strikes. |
+| moneyness | `m = log(K/S)/√T`: how far a strike is from spot, normalized. |
+| delta | `N(d₁)`: option price change per $1 move in spot. |
+| L1 imbal | `(bid_vol − ask_vol)/(bid_vol + ask_vol)` at best prices. |
+| edge | Min distance from fair before willing to trade. |
+| clip | Max order size for a single aggressive take. |
+| inv skew | Shift fair value against position to encourage reversion. |
+| EMA | `α × new + (1 − α) × old`. |
+| whale | Named bot whose trades predict short-term price direction. |
+| hard day | High-vol regime (R4 D3) where HG avg > 10000. |
