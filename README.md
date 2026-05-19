@@ -75,7 +75,7 @@ If we had to compress the entire competition into one line: **math sets the ceil
 
 ## Repos that supported this one
 
-- **graphIMC** — our local backtester, browser-based visualizer ("Bloomberg-style" dashboard), parameter-sweep harness, and the home of every strategy iteration we ran (~1,700 versions across rounds 3 + 5 alone). Visualizer is live at **https://imc-prosperity-visualizer.vercel.app**. Full writeup in [`tools/graphimc.md`](tools/graphimc.md).
+- **graphIMC** — our local backtester, browser-based visualizer ("Bloomberg-style" dashboard), parameter-sweep harness, and the home of every strategy iteration we ran (~1,700 versions across rounds 3 + 5 alone). Source not public; visualizer is live at **https://imc-prosperity-visualizer.vercel.app**. Full writeup in [`tools/graphimc.md`](tools/graphimc.md).
 - **prosperity-intel** — Discord intel pipeline (selfbot → SQLite → LLM extractor → digest) that scraped the official IMC Prosperity Discord 24/7 to feed competitor signal into our research process. Source not public. Full writeup in [`tools/prosperity-intel.md`](tools/prosperity-intel.md).
 
 ---

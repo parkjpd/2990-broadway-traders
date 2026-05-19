@@ -1,6 +1,6 @@
 # graphIMC — backtester, visualizer, sweep harness
 
-graphIMC is the project where every single strategy iteration we ran lived (roughly 1,700 named versions across rounds 3 and 5 alone), alongside the local backtester, the browser-based visualizer, and the parameter-sweep tooling that made it possible to iterate at that volume in the first place.
+graphIMC is the project where every single strategy iteration we ran lived (roughly 1,700 named versions across rounds 3 and 5 alone), alongside the local backtester, the browser-based visualizer, and the parameter-sweep tooling that made it possible to iterate at that volume in the first place. The source isn't public, but the visualizer is — drop in any IMC CSV bundle and submission log at **https://imc-prosperity-visualizer.vercel.app** to see it run.
 
 So why did this tool exist, and why was it worth maintaining? Moreover, why is the visualizer named after a Bloomberg terminal of all things?
 
