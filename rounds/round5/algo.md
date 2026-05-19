@@ -60,7 +60,7 @@ The audit chain that locked `r5_smooth_v1`:
 22:32  ship: r5_smooth_v1 final decision — smooth_v1 vs combined vs cluster_aware audit complete
 ```
 
-Subsequent experiments (`r5_taffy_framework`, `r5_taffy_avgseeds`, `r5_taffy_hybrid`) all PROMOTED on individual gates but were judged **not robust enough** to swap into the locked submission. We let them fight the ship and lose; the ship stayed.
+Subsequent experiments (`r5_taffy_framework`, `r5_taffy_avgseeds`, `r5_taffy_hybrid`) all PROMOTED on individual gates but were judged **not robust enough** to swap into the locked submission.
 
 ## Discord intel that mattered
 
@@ -74,7 +74,7 @@ The P3 R5 winners' conclusion translated to P4 R5 was actually a **negative-spac
 
 > *"Reducing mean reversion exposure (which had generated losses in Round 4)... half-hedged the baskets... limited mean reversion strategy to minimize risk."*
 
-That is, P3 winners did **not** lean on pair MR in R5. We took this as a robustness signal: pair-MR strategies can fail on the eval day in ways the sample doesn't show. It pushed us toward the more-robust `smooth_v1` over the higher-yield `Y_z17`.
+That is, P3 winners did **not** lean on pair MR in R5. We took this as a robustness signal as pair-MR strategies can fail on the eval day in ways the sample doesn't show. It pushed us toward the more-robust `smooth_v1` over the higher-yield `Y_z17`.
 
 ### 2. The P3R5 → P4R5 product mapping (manual round)
 
