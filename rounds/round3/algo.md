@@ -13,7 +13,7 @@ Over five days, we shipped 224 named iterations plus roughly 1,000 sweep variant
 | **VELVETFRUIT_EXTRACT (VF)** | 200 | Underlying with AR(1) ρ ≈ −0.16 tick-level reversion, plus ntra-day drift |
 | **VEV_4000 .. VEV_6500** (10 strikes) | 300 each | European calls on VF, fair-value-liquidated at round end (not exercised) |
 
-At first, the visualizer told us that all position limits were 80. This shaped our early strategies. We were sizing trades, setting caps, and controling risk around a false constraint. But the real limits, confirmed by both kevin-fu1/imc-prosperity-4-backtester and jmerle/imc-prosperity-3-backtester, and later by the mod, were 200/200/300.
+At first, the visualizer told us that all position limits were 80. So we began sizing trades, setting caps, and controling risk around a false constraint. But the real limits, confirmed by both kevin-fu1/imc-prosperity-4-backtester and jmerle/imc-prosperity-3-backtester, and later by the mod, were 200/200/300.
 
 That discovery came mid-round, around v15, and it more than doubled our PnL! We realized that nothing beautiful had to be added. No elaborate new model was needed. One mistaken constant was corrected, and the whole round opened up.
 
