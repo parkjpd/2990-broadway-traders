@@ -1,6 +1,6 @@
 # prosperity-intel — Discord scrape + LLM extraction pipeline
 
-[`parkjpd/prosperity-intel`](https://github.com/parkjpd/prosperity-intel) is a 24/7 Discord selfbot that scraped the official IMC Prosperity Discord into a SQLite DB on a VPS, an hourly LLM extractor that turned prose into structured insights, and a digest pipeline that fed those insights back into the strategy team every morning.
+prosperity-intel is a 24/7 Discord selfbot that scraped the official IMC Prosperity Discord into a SQLite DB on a VPS, an hourly LLM extractor that turned prose into structured insights, and a digest pipeline that fed those insights back into the strategy team every morning. The source isn't public (a selfbot reading a competition Discord doesn't belong in a public repo), but the architecture and what we got out of it is worth documenting.
 
 By the end of R5 the database had **131,201 messages**, **4,937 LLM-extracted insights**, **5,829 deletion events**, plus per-message attachments, replies, threads, and edit history. So the question worth asking up front: was a 24/7 selfbot worth the operational headache of running it for three weeks? Moreover, why should the deletion table be considered the highest-signal piece of the whole pipeline?
 
@@ -168,7 +168,7 @@ sshfs root@VPS:/root/prosperity-intel /tmp/intel
 sqlite3 "file:/tmp/intel/prosperity.db?mode=ro" "..."
 ```
 
-The full integration guide is in [`prosperity-intel/FOR_GRAPHIMC.md`](https://github.com/parkjpd/prosperity-intel/blob/main/FOR_GRAPHIMC.md), which is 27KB of how-to and is by far the longest doc in the repo.
+The full integration guide is in the project's own `FOR_GRAPHIMC.md` (27KB of how-to, by far the longest doc in the repo). The repo itself is not public.
 
 ## What we would do differently
 

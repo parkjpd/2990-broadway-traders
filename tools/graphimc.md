@@ -1,6 +1,6 @@
 # graphIMC — backtester, visualizer, sweep harness
 
-[`parkjpd/graphIMC`](https://github.com/parkjpd/graphIMC) is the repository where every single strategy iteration we ran lived (roughly 1,700 named versions across rounds 3 and 5 alone), alongside the local backtester, the browser-based visualizer, and the parameter-sweep tooling that made it possible to iterate at that volume in the first place.
+graphIMC is the project where every single strategy iteration we ran lived (roughly 1,700 named versions across rounds 3 and 5 alone), alongside the local backtester, the browser-based visualizer, and the parameter-sweep tooling that made it possible to iterate at that volume in the first place.
 
 So why did this tool exist, and why was it worth maintaining? Moreover, why is the visualizer named after a Bloomberg terminal of all things?
 
@@ -104,3 +104,7 @@ For multi-parameter sweeps we used `tools/sweep_3day.py` (parallelized across da
 The visualizer is the piece of the tooling that made the most difference per hour spent building it. If we had to keep one tool from this entire competition for next year, the Discord scraper is the obvious answer; the visualizer is the close second, because it is the difference between a strategy iteration loop that takes ten minutes and one that takes one.
 
 (If we ever cleaned this up to publish, `runner.py`, the visualizer's `index.html`, `tools/sweep.py`, and `algos/r5/verify_submission.py` are the four pieces that generalize. The ~1,700 strategy files and the per-round findings docs are too round-specific to be worth releasing.)
+
+---
+
+**The visualizer is live at https://imc-prosperity-visualizer.vercel.app** — drop in any IMC CSV bundle and submission log to see the dashboard.
